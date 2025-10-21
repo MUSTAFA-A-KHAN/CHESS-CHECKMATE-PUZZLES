@@ -197,6 +197,8 @@ const App: React.FC = () => {
     const [moveInput, setMoveInput] = useState<string>('');
     const [feedback, setFeedback] = useState<'idle' | 'correct' | 'incorrect'>('idle');
     const [isAnswerVisible, setIsAnswerVisible] = useState<boolean>(false);
+    const [elapsedTime, setElapsedTime] = useState<number>(0);
+    const [solveTime, setSolveTime] = useState<number | null>(null);
 
     useEffect(() => {
         fetch('/test.csv')
@@ -208,10 +210,22 @@ const App: React.FC = () => {
             });
     }, []);
 
+    useEffect(() => {
+        if (!currentPuzzle) return;
+
+        const interval = setInterval(() => {
+            setElapsedTime(prev => prev + 1);
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [currentPuzzle]);
+
     const loadNextPuzzle = useCallback(() => {
         setFeedback('idle');
         setMoveInput('');
         setIsAnswerVisible(false);
+        setElapsedTime(0);
+        setSolveTime(null);
         if (puzzles.length > 0) {
             setCurrentPuzzle(getRandomPuzzle(puzzles));
         }
@@ -229,6 +243,7 @@ const App: React.FC = () => {
         if (moveInput.trim().toLowerCase() === currentPuzzle.best.toLowerCase()) {
             setFeedback('correct');
             setIsAnswerVisible(false);
+            setSolveTime(elapsedTime);
         } else {
             setFeedback('incorrect');
         }
@@ -237,6 +252,12 @@ const App: React.FC = () => {
     const handleShowAnswer = () => {
         setIsAnswerVisible(true);
         setFeedback('idle');
+    };
+
+    const formatTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
     return (
@@ -264,7 +285,19 @@ const App: React.FC = () => {
                         />
                     </>
                 )}
+
             </main>
+              <header className="text-center mb-6">
+                {currentPuzzle && (
+                    <div className="text-slate-300 mt-4 text-lg font-mono">
+                        Time: {formatTime(elapsedTime)}
+                        {solveTime !== null && (
+                            <span className="text-green-400 ml-4">Solved in {formatTime(solveTime)}</span>
+                        )}
+                    </div>
+                )}
+                
+            </header>
 
             <footer className="text-center mt-8 text-slate-500 text-sm">
                 <p>Built with React, TypeScript, and Tailwind CSS.</p>
