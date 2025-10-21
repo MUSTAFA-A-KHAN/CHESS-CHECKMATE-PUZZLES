@@ -6,15 +6,13 @@ toolchain go1.24.9
 
 require (
 	github.com/Hultan/chessImager v1.3.1
+	github.com/MUSTAFA-A-KHAN/telegram-bot-anime v0.0.0-20250927132931-837464c9a1f2
 	github.com/chromedp/chromedp v0.14.2
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
-	github.com/notnil/chess v1.10.0
 )
 
 require (
-	github.com/MUSTAFA-A-KHAN/telegram-bot-anime v0.0.0-20250927132931-837464c9a1f2 // indirect
 	github.com/STRockefeller/dictionaries v0.0.0-20230418055520-d602c50bb54f // indirect
-	github.com/ajstarks/svgo v0.0.0-20200320125537-f189e35d30ca // indirect
 	github.com/chromedp/cdproto v0.0.0-20250724212937-08a3db8b4327 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/fogleman/gg v1.3.0 // indirect

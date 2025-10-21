@@ -46,7 +46,56 @@ func main() {
 
 	// Handle updates
 	for update := range updates {
+		if update.InlineQuery != nil {
+			fmt.Println("Inline query received!")
 
+			// Generate new chessboard image
+			BestMove, err := ProcessRandomCSVFile()
+			if err != nil {
+				log.Println("Failed to generate chessboard:", err)
+				continue
+			}
+
+			// Send the photo to upload chat to get file_id
+			uploadChatID := int64(-1002401314616)
+			photoMsg := tgbotapi.NewPhoto(uploadChatID, tgbotapi.FilePath("chessboard.png"))
+			sentMsg, err := bot.Send(photoMsg)
+			if err != nil {
+				log.Println("Failed to send photo for file_id:", err)
+				continue
+			}
+			bot.Send(tgbotapi.NewMessage(uploadChatID, BestMove))
+
+			// Get file_id from the sent message
+			if len(sentMsg.Photo) == 0 {
+				log.Println("No photo in sent message")
+				continue
+			}
+			fileID := sentMsg.Photo[0].FileID
+
+			// Delete the sent message to avoid spamming the channel
+			_, err = bot.Request(tgbotapi.DeleteMessageConfig{ChatID: uploadChatID, MessageID: sentMsg.MessageID})
+			if err != nil {
+				log.Println("Failed to delete message:", err)
+			}
+
+			photo := tgbotapi.NewInlineQueryResultPhoto(
+				"unique-id-123", // unique ID for this inline result
+				fileID,          // Telegram file ID
+			)
+			photo.Caption = "Checkmate in one Move!"
+
+			inlineConf := tgbotapi.InlineConfig{
+				InlineQueryID: update.InlineQuery.ID,
+				IsPersonal:    true,
+				CacheTime:     0,
+				Results:       []interface{}{photo},
+			}
+
+			if _, err := bot.Request(inlineConf); err != nil {
+				log.Println("Failed to answer inline query:", err)
+			}
+		}
 		if update.Message == nil {
 			continue
 		}
