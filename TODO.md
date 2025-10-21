@@ -1,12 +1,22 @@
-# TODO: Implement Telegram Bot Backend for Chess Puzzle Screenshots
+# TODO: Implement Chess Puzzle Guessing Game
 
-## Steps to Complete
-- [x] Initialize Go module (go mod init chess-checkmate-puzzles-backend)
-- [x] Install dependencies: go get github.com/go-telegram-bot-api/telegram-bot-api/v5, go get github.com/chromedp/chromedp
-- [x] Implement Telegram bot in backend/main.go:
-  - Set up bot with token from environment variable TELEGRAM_BOT_TOKEN
-  - Handle /screenshot command
-  - Use chromedp to navigate to http://localhost:3000, capture screenshot
-  - Send the screenshot image to the Telegram chat
-- [ ] Run the backend (go run backend/main.go)
-- [ ] Test the bot by sending /screenshot in Telegram (ensure frontend is running on localhost:3000)
+## Step 1: Modify ProcessRandomCSVFile to return bestMove ✅
+- Update the function to return the bestMove string along with generating the image.
+
+## Step 2: Add game state management ✅
+- Add global maps to track current bestMove per chat and user scores per chat per user.
+
+## Step 3: Update /screenshot command to start a new puzzle ✅
+- When /screenshot is received, generate puzzle, send image, store bestMove for the chat, and prompt user to guess.
+
+## Step 4: Handle user guesses in message updates ✅
+- For non-command messages, check if there's an active puzzle for the chat.
+- If message matches bestMove, award point, send positive reaction, clear puzzle.
+- If not, send negative reaction.
+
+## Step 5: Add score tracking and display ✅
+- Implement logic to increment scores on correct guesses.
+- Add a /score command to display current scores for the chat.
+
+## Step 6: Test the implementation
+- Run the bot and test the game flow: start puzzle, guess correctly/incorrectly, check scores.

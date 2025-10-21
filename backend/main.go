@@ -3,6 +3,7 @@ package main
 import (
 	"image/png"
 	"os"
+	"sync"
 
 	"github.com/Hultan/chessImager"
 
@@ -10,8 +11,16 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/MUSTAFA-A-KHAN/telegram-bot-anime/view"
+
 	"github.com/chromedp/chromedp"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
+
+var (
+	activePuzzles = make(map[int64]string)        // chatID -> bestMove
+	userScores    = make(map[int64]map[int64]int) // chatID -> userID -> score
+	mu            sync.RWMutex
 )
 
 func main() {
@@ -37,50 +46,88 @@ func main() {
 
 	// Handle updates
 	for update := range updates {
+
 		if update.Message == nil {
 			continue
 		}
 
-		if update.Message.Text == "/screenshot" {
-			ProcessRandomCSVFile()
+		chatID := update.Message.Chat.ID
+		userID := update.Message.From.ID
+		text := update.Message.Text
+		messasgeID := update.Message.MessageID
 
-			// // initialize a controllable Chrome instance
-			// ctx, cancel := chromedp.NewContext(
-			// 	context.Background(),
-			// )
-			// // release the browser resources when
-			// // it is no longer needed
-			// defer cancel()
+		switch text {
+		case "/screenshot":
+			bestMove, err := ProcessRandomCSVFile()
+			if err != nil {
+				msg := tgbotapi.NewMessage(chatID, "Error generating puzzle")
+				bot.Send(msg)
+				continue
+			}
 
-			// // capture screenshot of complete page
-			// if err := captureFullPageScreenshot(ctx); err != nil {
-			// 	log.Print("Error capturing full page screenshot:", err)
-			// }
-			// fmt.Println("Success")
-			// if err != nil {
-			// 	log.Printf("Error taking screenshot: %v", err)
-			// 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error taking screenshot")
-			// 	bot.Send(msg)
-			// 	continue
-			// }
-			fmt.Println("1...")
+			mu.Lock()
+			activePuzzles[chatID] = bestMove
+			mu.Unlock()
+
 			// Send photo
-			photo := tgbotapi.NewPhoto(update.Message.Chat.ID, tgbotapi.FilePath("chessboard.png"))
-			photo.Caption = "Chess puzzle screenshot"
+			photo := tgbotapi.NewPhoto(chatID, tgbotapi.FilePath("chessboard.png"))
+			photo.Caption = "Guess the best move! Reply with your answer."
 			_, err = bot.Send(photo)
 			if err != nil {
 				log.Printf("Error sending photo: %v", err)
 			}
-			fmt.Println("2....")
 
-			// Clean up screenshot file
-			os.Remove("full-page-screenshot.png")
+		case "/score":
+			mu.RLock()
+			scores, exists := userScores[chatID]
+			mu.RUnlock()
+
+			if !exists || len(scores) == 0 {
+				msg := tgbotapi.NewMessage(chatID, "No scores yet!")
+				bot.Send(msg)
+				continue
+			}
+
+			scoreText := "Current Scores:\n"
+			for uid, score := range scores {
+				scoreText += fmt.Sprintf("User %d: %d points\n", uid, score)
+			}
+			msg := tgbotapi.NewMessage(chatID, scoreText)
+			bot.Send(msg)
+
+		default:
+			mu.RLock()
+			expectedMove, hasPuzzle := activePuzzles[chatID]
+			mu.RUnlock()
+
+			if hasPuzzle {
+				if text == expectedMove {
+					// Correct guess
+					mu.Lock()
+					if userScores[chatID] == nil {
+						userScores[chatID] = make(map[int64]int)
+					}
+					userScores[chatID][userID]++
+					delete(activePuzzles, chatID)
+					mu.Unlock()
+
+					msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Correct! %s is the best move. You earned a point!", expectedMove))
+					view.ReactToMessage(botToken, chatID, messasgeID, "🎉", true)
+					bot.Send(msg)
+				} else {
+					// Incorrect guess
+					msg := tgbotapi.NewMessage(chatID, "Wrong! Try again.")
+					view.ReactToMessage(botToken, chatID, messasgeID, "🤔", true)
+					bot.Send(msg)
+				}
+			}
 		}
 	}
 }
 
 func takeScreenshot() (string, error) {
 	fmt.Println("9...")
+
 	// Create context
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
@@ -185,31 +232,31 @@ func captureFullPageScreenshot(ctx context.Context) error {
 // 	return imagePath, bestMove, nil
 // }
 
-func ProcessRandomCSVFile() {
+func ProcessRandomCSVFile() (string, error) {
 	// fen := "1rb5/4r3/3p1npb/3kp1P1/1P3P1P/5nR1/2Q1BK2/bN4NR w - - 3 61" // Starting position FEN
-	fen, _, err := FenGenerator("../public/test.csv")
+	fen, bestMove, err := FenGenerator("../public/test.csv")
+	if err != nil {
+		return "", fmt.Errorf("failed to generate FEN: %w", err)
+	}
 
 	// Create a new imager and render the FEN
 	img, err := chessImager.NewImager().Render(fen)
 	if err != nil {
-		fmt.Println("Error rendering image:", err)
-		return
+		return "", fmt.Errorf("error rendering image: %w", err)
 	}
 
 	// Save the image to a file
 	file, err := os.Create("chessboard.png")
 	if err != nil {
-		fmt.Println("Error creating file:", err)
-		return
+		return "", fmt.Errorf("error creating file: %w", err)
 	}
 	defer file.Close()
 
 	err = png.Encode(file, img)
 	if err != nil {
-		fmt.Println("Error encoding image:", err)
-		return
+		return "", fmt.Errorf("error encoding image: %w", err)
 	}
 
 	fmt.Println("Chessboard image 'chessboard.png' created successfully.")
-
+	return bestMove, nil
 }
