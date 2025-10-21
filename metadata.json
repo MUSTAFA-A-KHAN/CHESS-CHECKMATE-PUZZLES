@@ -1,0 +1,5 @@
+{
+  "name": "Chess Checkmate Puzzles",
+  "description": "A web application that presents chess puzzles from a CSV file. Users are challenged to find the single move that leads to checkmate.",
+  "requestFramePermissions": []
+}
