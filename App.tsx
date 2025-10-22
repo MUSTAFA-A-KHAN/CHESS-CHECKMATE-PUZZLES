@@ -201,7 +201,7 @@ const App: React.FC = () => {
     const [solveTime, setSolveTime] = useState<number | null>(null);
 
     useEffect(() => {
-        fetch('/test.csv')
+        fetch('test.csv')
             .then(res => res.text())
             .then(csv => {
                 const parsed = parseCsv(csv);
