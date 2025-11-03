@@ -56,6 +56,8 @@ let r2;
 const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedbackChange: (feedback: 'idle' | 'correct' | 'incorrect') => void }> = ({ fen, currentPuzzle, setFeedback,
     setIsAnswerVisible, setSolveTime, elapsedTime }) => {
 
+    const [selectedSquare, setSelectedSquare] = useState<{row: number, col: number} | null>(null);
+
     const board = fenToBoard(fen);
     const whoToMove = fen.split(' ')[1] === 'w' ? 'White' : 'Black';
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -85,6 +87,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                         console.log("inside if", flagForPiece);
                                         flagForPiece = true;
                                         r1 = result;
+                                        setSelectedSquare({row: rowIndex, col: colIndex});
                                         //when  clicked this button highlight it.
                                         console.log("inside if after ", flagForPiece);
                                     } else {
@@ -106,16 +109,18 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                             }
                                         }
                                         flagForPiece = false;
+                                        setSelectedSquare(null);
                                     }
                                 }
 
 
+                                const isSelected = selectedSquare && selectedSquare.row === rowIndex && selectedSquare.col === colIndex;
                                 return (
                                     <div
                                         key={`${rowIndex}-${colIndex}`}
                                         style={{ cursor: "pointer" }}
                                         onClick={() => handleClickOnBlankPiece(rowIndex, colIndex)}
-                                        className={`flex-1 aspect-square flex items-center justify-center ${squareColor}`}
+                                        className={`flex-1 aspect-square flex items-center justify-center ${squareColor} ${isSelected ? 'ring-4 ring-yellow-400' : ''}`}
                                         role="gridcell"
                                     >
                                         <span style={{ cursor: "pointer" }} className={`text-4xl  sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]`}>
