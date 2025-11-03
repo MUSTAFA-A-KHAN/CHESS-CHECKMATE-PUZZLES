@@ -48,9 +48,14 @@ const fenToBoard = (fen: string): (string | null)[][] => {
     }
     return board;
 };
+let flagForPiece = false;
+let r1;
+let r2;
 
 // --- Chessboard Component ---
-const Chessboard: React.FC<{ fen: string }> = ({ fen }) => {
+const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedbackChange: (feedback: 'idle' | 'correct' | 'incorrect') => void }> = ({ fen, currentPuzzle, setFeedback,
+    setIsAnswerVisible, setSolveTime, elapsedTime }) => {
+
     const board = fenToBoard(fen);
     const whoToMove = fen.split(' ')[1] === 'w' ? 'White' : 'Black';
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -69,13 +74,51 @@ const Chessboard: React.FC<{ fen: string }> = ({ fen }) => {
                                 const isLight = (rowIndex + colIndex) % 2 === 0;
                                 const squareColor = isLight ? 'bg-[#f0d9b5]' : 'bg-[#b58863]';
                                 const pieceColor = piece && '♔♕♖♗♘♙'.includes(piece) ? 'text-slate-100' : 'text-slate-900';
+                                function handleClickOnBlankPiece(rowIndex: number, colIndex: number) {
+                                    // throw new Error('Function not implemented.');
+                                    console.log("rowIndex", ranks[rowIndex]);
+                                    console.log("colIndex", files[colIndex]);
+                                    const result = files[colIndex] + ranks[rowIndex];
+                                    console.log(result);
+                                    console.log(flagForPiece);
+                                    if (!flagForPiece) {
+                                        console.log("inside if", flagForPiece);
+                                        flagForPiece = true;
+                                        r1 = result;
+                                        //when  clicked this button highlight it.
+                                        console.log("inside if after ", flagForPiece);
+                                    } else {
+                                        console.log("inside else", flagForPiece);
+                                        r2 = result;
+                                        console.log("r:", r1 + r2);
+                                        // Implement the check if the result is acceptable or not
+                                        if (currentPuzzle) {
+                                            // console.log("Correct answer::::", currentPuzzle.best.toLowerCase())
+                                            const bestMove = currentPuzzle.best.toLowerCase();
+                                            let answer = r1 + r2;
+                                            if (answer === bestMove) {
+                                                // console.log("correct");
+                                                setFeedback('correct');
+                                                setIsAnswerVisible(false);
+                                                setSolveTime(elapsedTime);
+                                            } else {
+                                                // console.log("Incorrect")
+                                            }
+                                        }
+                                        flagForPiece = false;
+                                    }
+                                }
+
+
                                 return (
                                     <div
                                         key={`${rowIndex}-${colIndex}`}
+                                        style={{ cursor: "pointer" }}
+                                        onClick={() => handleClickOnBlankPiece(rowIndex, colIndex)}
                                         className={`flex-1 aspect-square flex items-center justify-center ${squareColor}`}
                                         role="gridcell"
                                     >
-                                        <span className={`text-4xl sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]`}>
+                                        <span style={{ cursor: "pointer" }} className={`text-4xl  sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]`}>
                                             {piece}
                                         </span>
                                     </div>
@@ -120,75 +163,75 @@ const PuzzleInterface: React.FC<{
     isAnswerShown,
     correctAnswer
 }) => {
-    const feedbackClasses = {
-        idle: 'border-slate-600 focus:border-emerald-500 focus:ring-emerald-500',
-        correct: 'border-green-500 bg-green-900/50 ring-2 ring-green-500 text-green-300',
-        incorrect: 'border-red-500 bg-red-900/50 ring-2 ring-red-500 text-red-300'
-    };
+        const feedbackClasses = {
+            idle: 'border-slate-600 focus:border-emerald-500 focus:ring-emerald-500',
+            correct: 'border-green-500 bg-green-900/50 ring-2 ring-green-500 text-green-300',
+            incorrect: 'border-red-500 bg-red-900/50 ring-2 ring-red-500 text-red-300'
+        };
 
-    const feedbackMessages = {
-        correct: 'Correct! Well done.',
-        incorrect: 'Not quite, try again!'
-    };
+        const feedbackMessages = {
+            correct: 'Correct! Well done.',
+            incorrect: 'Not quite, try again!'
+        };
 
-    return (
-        <div className="w-full max-w-sm mt-6 text-center">
-            <form onSubmit={onSubmitMove} className="flex flex-col sm:flex-row items-center gap-3">
-                <div className="relative w-full">
-                    <input
-                        type="text"
-                        value={moveInput}
-                        onChange={onMoveInputChange}
-                        placeholder="e.g., Qf7"
-                        className={`w-full px-4 py-3 bg-slate-900/70 border-2 rounded-lg text-lg text-center transition-all duration-300 focus:outline-none ${feedbackClasses[feedback]}`}
-                        aria-label="Enter your move"
-                        aria-describedby="feedback-message"
-                        disabled={feedback === 'correct'}
-                    />
-                    {feedback !== 'idle' && (
-                        <p id="feedback-message" className={`mt-2 text-sm font-medium ${feedback === 'correct' ? 'text-green-400' : 'text-red-400'}`}>
-                            {feedbackMessages[feedback]}
+        return (
+            <div className="w-full max-w-sm mt-6 text-center">
+                <form onSubmit={onSubmitMove} className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="relative w-full">
+                        <input
+                            type="text"
+                            value={moveInput}
+                            onChange={onMoveInputChange}
+                            placeholder="e.g., Qf7"
+                            className={`w-full px-4 py-3 bg-slate-900/70 border-2 rounded-lg text-lg text-center transition-all duration-300 focus:outline-none ${feedbackClasses[feedback]}`}
+                            aria-label="Enter your move"
+                            aria-describedby="feedback-message"
+                            disabled={feedback === 'correct'}
+                        />
+                        {feedback !== 'idle' && (
+                            <p id="feedback-message" className={`mt-2 text-sm font-medium ${feedback === 'correct' ? 'text-green-400' : 'text-red-400'}`}>
+                                {feedbackMessages[feedback]}
+                            </p>
+                        )}
+                    </div>
+
+                    {feedback !== 'correct' && (
+                        <button
+                            type="submit"
+                            className="w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-500 transition-transform transform active:scale-95"
+                        >
+                            Submit
+                        </button>
+                    )}
+                </form>
+
+                <div className="h-8 mt-4 flex items-center justify-center">
+                    {feedback !== 'correct' && !isAnswerShown && (
+                        <button
+                            type="button"
+                            onClick={onShowAnswer}
+                            className="text-slate-400 hover:text-emerald-400 text-sm font-medium transition-colors underline"
+                            aria-label="Show correct answer"
+                        >
+                            Show Answer
+                        </button>
+                    )}
+                    {isAnswerShown && (
+                        <p className="text-lg text-amber-400 font-bold">
+                            Correct move: <span className="font-mono">{correctAnswer}</span>
                         </p>
                     )}
                 </div>
 
-                {feedback !== 'correct' && (
-                    <button
-                        type="submit"
-                        className="w-full sm:w-auto px-6 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-500 transition-transform transform active:scale-95"
-                    >
-                        Submit
-                    </button>
-                )}
-            </form>
-
-            <div className="h-8 mt-4 flex items-center justify-center">
-                {feedback !== 'correct' && !isAnswerShown && (
-                    <button
-                        type="button"
-                        onClick={onShowAnswer}
-                        className="text-slate-400 hover:text-emerald-400 text-sm font-medium transition-colors underline"
-                        aria-label="Show correct answer"
-                    >
-                        Show Answer
-                    </button>
-                )}
-                {isAnswerShown && (
-                    <p className="text-lg text-amber-400 font-bold">
-                        Correct move: <span className="font-mono">{correctAnswer}</span>
-                    </p>
-                )}
+                <button
+                    onClick={onNextPuzzle}
+                    className="w-full mt-2 px-6 py-3 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
+                >
+                    {feedback === 'correct' ? 'Next Puzzle' : 'New Puzzle'}
+                </button>
             </div>
-
-            <button
-                onClick={onNextPuzzle}
-                className="w-full mt-2 px-6 py-3 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
-            >
-                {feedback === 'correct' ? 'Next Puzzle' : 'New Puzzle'}
-            </button>
-        </div>
-    );
-};
+        );
+    };
 
 // --- Main App Component ---
 const App: React.FC = () => {
@@ -272,7 +315,15 @@ const App: React.FC = () => {
                     <div className="text-slate-400">Loading puzzle...</div>
                 ) : (
                     <>
-                        <Chessboard fen={currentPuzzle.fen} />
+                        <Chessboard fen={currentPuzzle.fen}
+                            currentPuzzle={currentPuzzle}
+                            onFeedbackChange={setFeedback}
+                            onSubmitMove={handleSubmitMove}
+                            setFeedback={setFeedback}
+                            setIsAnswerVisible={setIsAnswerVisible}
+                            setSolveTime={setSolveTime}
+                            elapsedTime={elapsedTime}
+                        />
                         <PuzzleInterface
                             moveInput={moveInput}
                             onMoveInputChange={handleMoveInputChange}
@@ -287,7 +338,7 @@ const App: React.FC = () => {
                 )}
 
             </main>
-              <header className="text-center mb-6">
+            <header className="text-center mb-6">
                 {currentPuzzle && (
                     <div className="text-slate-300 mt-4 text-lg font-mono">
                         Time: {formatTime(elapsedTime)}
@@ -296,7 +347,7 @@ const App: React.FC = () => {
                         )}
                     </div>
                 )}
-                
+
             </header>
 
             <footer className="text-center mt-8 text-slate-500 text-sm">

@@ -1,7 +1,6 @@
-# Deployment Plan for Vite Project on GitHub Pages
+# TODO: Implement Check for Acceptable Move in Chessboard
 
-- [x] Update vite.config.ts to set base: '/CHESS-CHECKMATE-PUZZLES/'
-- [x] Update package.json: add gh-pages to devDependencies and "deploy": "gh-pages -d dist" to scripts
-- [x] Run npm install to install gh-pages
-- [x] Run npm run build to build the project
-- [x] Run npm run deploy to deploy to GitHub Pages
+- [x] Update Chessboard component to accept currentPuzzle and onFeedbackChange props
+- [x] Implement the validation logic in handleClickOnBlankPiece to check if the selected move (r2) matches the target square from currentPuzzle.best
+- [x] Update App.tsx to pass currentPuzzle and setFeedback function as props to Chessboard
+- [x] Test the click-to-move functionality to ensure correct moves are identified and feedback is set appropriately
