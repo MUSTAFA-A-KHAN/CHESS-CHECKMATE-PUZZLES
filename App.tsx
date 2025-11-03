@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Chess } from 'chess.js';
 
+const audioUrl = 'kira_death_note.mp3';
+
 // --- Type Definition ---
 interface Puzzle {
     fen: string;
@@ -103,6 +105,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                             if (answer === bestMove) {
                                                 // console.log("correct");
                                                 setFeedback('correct');
+                                                new Audio(audioUrl).play();
                                                 setIsAnswerVisible(false);
                                                 setSolveTime(elapsedTime);
                                                 setShowCongrats(true);
@@ -312,6 +315,7 @@ const App: React.FC = () => {
         if (!currentPuzzle || !moveInput.trim()) return;
         if (moveInput.trim().toLowerCase() === currentPuzzle.best.toLowerCase()) {
             setFeedback('correct');
+            new Audio(audioUrl).play();
             setIsAnswerVisible(false);
             setSolveTime(elapsedTime);
             setShowCongrats(true);
