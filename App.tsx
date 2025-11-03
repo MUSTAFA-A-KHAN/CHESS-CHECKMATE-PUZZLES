@@ -57,7 +57,7 @@ let r2;
 const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedbackChange: (feedback: 'idle' | 'correct' | 'incorrect') => void; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void }> = ({ fen, currentPuzzle, setFeedback,
     setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen }) => {
 
-    const [selectedSquare, setSelectedSquare] = useState<{row: number, col: number} | null>(null);
+    const [selectedSquare, setSelectedSquare] = useState<{ row: number, col: number } | null>(null);
 
     const board = fenToBoard(fen);
     const whoToMove = fen.split(' ')[1] === 'w' ? 'White' : 'Black';
@@ -88,7 +88,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                         console.log("inside if", flagForPiece);
                                         flagForPiece = true;
                                         r1 = result;
-                                        setSelectedSquare({row: rowIndex, col: colIndex});
+                                        setSelectedSquare({ row: rowIndex, col: colIndex });
                                         //when  clicked this button highlight it.
                                         console.log("inside if after ", flagForPiece);
                                     } else {
@@ -111,7 +111,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                                 chess.move(currentPuzzle.best);
                                                 setCurrentFen(chess.fen());
                                                 // Hide congrats after 3 seconds
-                                                setTimeout(() => setShowCongrats(false), 3000);
+                                                setTimeout(() => setShowCongrats(false), 2000);
                                             } else {
                                                 // console.log("Incorrect")
                                             }
@@ -154,7 +154,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
             </div>
             {showCongrats && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-                    <div className="bg-green-500 text-white text-2xl font-bold px-8 py-4 rounded-lg shadow-lg animate-pulse">
+                    <div class="bg-yellow-400 text-gray-900 text-3xl font-bold px-10 py-5 rounded-lg border-4 border-yellow-600 shadow-2xl transform hover:-translate-y-1 transition duration-150">
                         Congratulations! Checkmate!
                     </div>
                 </div>
