@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Chess } from 'chess.js';
 
 // --- Type Definition ---
 interface Puzzle {
@@ -53,8 +54,8 @@ let r1;
 let r2;
 
 // --- Chessboard Component ---
-const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedbackChange: (feedback: 'idle' | 'correct' | 'incorrect') => void }> = ({ fen, currentPuzzle, setFeedback,
-    setIsAnswerVisible, setSolveTime, elapsedTime }) => {
+const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedbackChange: (feedback: 'idle' | 'correct' | 'incorrect') => void; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void }> = ({ fen, currentPuzzle, setFeedback,
+    setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen }) => {
 
     const [selectedSquare, setSelectedSquare] = useState<{row: number, col: number} | null>(null);
 
@@ -104,6 +105,13 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                                 setFeedback('correct');
                                                 setIsAnswerVisible(false);
                                                 setSolveTime(elapsedTime);
+                                                setShowCongrats(true);
+                                                // Update FEN after correct move
+                                                const chess = new Chess(fen);
+                                                chess.move(currentPuzzle.best);
+                                                setCurrentFen(chess.fen());
+                                                // Hide congrats after 3 seconds
+                                                setTimeout(() => setShowCongrats(false), 3000);
                                             } else {
                                                 // console.log("Incorrect")
                                             }
@@ -144,6 +152,13 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
             <div className="bg-slate-800 text-center py-1 text-sm font-semibold text-slate-300 mt-2 rounded-md">
                 {whoToMove} to move
             </div>
+            {showCongrats && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                    <div className="bg-green-500 text-white text-2xl font-bold px-8 py-4 rounded-lg shadow-lg animate-pulse">
+                        Congratulations! Checkmate!
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -247,6 +262,8 @@ const App: React.FC = () => {
     const [isAnswerVisible, setIsAnswerVisible] = useState<boolean>(false);
     const [elapsedTime, setElapsedTime] = useState<number>(0);
     const [solveTime, setSolveTime] = useState<number | null>(null);
+    const [currentFen, setCurrentFen] = useState<string>('');
+    const [showCongrats, setShowCongrats] = useState<boolean>(false);
 
     useEffect(() => {
         fetch('test.csv')
@@ -254,7 +271,9 @@ const App: React.FC = () => {
             .then(csv => {
                 const parsed = parseCsv(csv);
                 setPuzzles(parsed);
-                setCurrentPuzzle(getRandomPuzzle(parsed));
+                const puzzle = getRandomPuzzle(parsed);
+                setCurrentPuzzle(puzzle);
+                setCurrentFen(puzzle.fen);
             });
     }, []);
 
@@ -274,8 +293,11 @@ const App: React.FC = () => {
         setIsAnswerVisible(false);
         setElapsedTime(0);
         setSolveTime(null);
+        setShowCongrats(false);
         if (puzzles.length > 0) {
-            setCurrentPuzzle(getRandomPuzzle(puzzles));
+            const puzzle = getRandomPuzzle(puzzles);
+            setCurrentPuzzle(puzzle);
+            setCurrentFen(puzzle.fen);
         }
     }, [puzzles]);
 
@@ -292,6 +314,13 @@ const App: React.FC = () => {
             setFeedback('correct');
             setIsAnswerVisible(false);
             setSolveTime(elapsedTime);
+            setShowCongrats(true);
+            // Update FEN after correct move
+            const chess = new Chess(currentFen);
+            chess.move(currentPuzzle.best);
+            setCurrentFen(chess.fen());
+            // Hide congrats after 3 seconds
+            setTimeout(() => setShowCongrats(false), 3000);
         } else {
             setFeedback('incorrect');
         }
@@ -320,7 +349,7 @@ const App: React.FC = () => {
                     <div className="text-slate-400">Loading puzzle...</div>
                 ) : (
                     <>
-                        <Chessboard fen={currentPuzzle.fen}
+                        <Chessboard fen={currentFen}
                             currentPuzzle={currentPuzzle}
                             onFeedbackChange={setFeedback}
                             onSubmitMove={handleSubmitMove}
@@ -328,6 +357,9 @@ const App: React.FC = () => {
                             setIsAnswerVisible={setIsAnswerVisible}
                             setSolveTime={setSolveTime}
                             elapsedTime={elapsedTime}
+                            showCongrats={showCongrats}
+                            setShowCongrats={setShowCongrats}
+                            setCurrentFen={setCurrentFen}
                         />
                         <PuzzleInterface
                             moveInput={moveInput}
