@@ -15,6 +15,7 @@ import (
 
 	"github.com/chromedp/chromedp"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"strings"
 )
 
 var (
@@ -49,8 +50,14 @@ func main() {
 		if update.InlineQuery != nil {
 			fmt.Println("Inline query received!")
 
+			// Determine the file path based on query
+			filePath := "../public/test.csv"
+			if update.InlineQuery.Query == "2mode" {
+				filePath = "../public/test2.csv"
+			}
+
 			// Generate new chessboard image
-			BestMove, err := ProcessRandomCSVFile()
+			fen, BestMove, err := ProcessRandomCSVFile(filePath)
 			if err != nil {
 				log.Println("Failed to generate chessboard:", err)
 				continue
@@ -79,11 +86,21 @@ func main() {
 				log.Println("Failed to delete message:", err)
 			}
 
+			// Determine whose turn it is
+			turn := "White"
+			if strings.Contains(fen, " b ") {
+				turn = "Black"
+			}
+
 			photo := tgbotapi.NewInlineQueryResultPhoto(
 				"unique-id-123", // unique ID for this inline result
 				fileID,          // Telegram file ID
 			)
-			photo.Caption = "Checkmate in one Move!"
+			if update.InlineQuery.Query == "2mode" {
+				photo.Caption = fmt.Sprintf("Checkmate in two Moves! It's %s's turn.", turn)
+			} else {
+				photo.Caption = fmt.Sprintf("Checkmate in one Move! It's %s's turn.", turn)
+			}
 
 			inlineConf := tgbotapi.InlineConfig{
 				InlineQueryID: update.InlineQuery.ID,
@@ -107,7 +124,7 @@ func main() {
 
 		switch text {
 		case "/screenshot":
-			bestMove, err := ProcessRandomCSVFile()
+			fen, bestMove, err := ProcessRandomCSVFile("../public/test.csv")
 			if err != nil {
 				msg := tgbotapi.NewMessage(chatID, "Error generating puzzle")
 				bot.Send(msg)
@@ -118,9 +135,15 @@ func main() {
 			activePuzzles[chatID] = bestMove
 			mu.Unlock()
 
+			// Determine whose turn it is
+			turn := "White"
+			if strings.Contains(fen, " b ") {
+				turn = "Black"
+			}
+
 			// Send photo
 			photo := tgbotapi.NewPhoto(chatID, tgbotapi.FilePath("chessboard.png"))
-			photo.Caption = "Guess the best move! Reply with your answer."
+			photo.Caption = fmt.Sprintf("Guess the best move! It's %s's turn. Reply with your answer.", turn)
 			_, err = bot.Send(photo)
 			if err != nil {
 				log.Printf("Error sending photo: %v", err)
@@ -281,31 +304,31 @@ func captureFullPageScreenshot(ctx context.Context) error {
 // 	return imagePath, bestMove, nil
 // }
 
-func ProcessRandomCSVFile() (string, error) {
+func ProcessRandomCSVFile(filePath string) (string, string, error) {
 	// fen := "1rb5/4r3/3p1npb/3kp1P1/1P3P1P/5nR1/2Q1BK2/bN4NR w - - 3 61" // Starting position FEN
-	fen, bestMove, err := FenGenerator("../public/test.csv")
+	fen, bestMove, err := FenGenerator(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate FEN: %w", err)
+		return "", "", fmt.Errorf("failed to generate FEN: %w", err)
 	}
 
 	// Create a new imager and render the FEN
 	img, err := chessImager.NewImager().Render(fen)
 	if err != nil {
-		return "", fmt.Errorf("error rendering image: %w", err)
+		return "", "", fmt.Errorf("error rendering image: %w", err)
 	}
 
 	// Save the image to a file
 	file, err := os.Create("chessboard.png")
 	if err != nil {
-		return "", fmt.Errorf("error creating file: %w", err)
+		return "", "", fmt.Errorf("error creating file: %w", err)
 	}
 	defer file.Close()
 
 	err = png.Encode(file, img)
 	if err != nil {
-		return "", fmt.Errorf("error encoding image: %w", err)
+		return "", "", fmt.Errorf("error encoding image: %w", err)
 	}
 
 	fmt.Println("Chessboard image 'chessboard.png' created successfully.")
-	return bestMove, nil
+	return fen, bestMove, nil
 }
