@@ -442,6 +442,16 @@ const App: React.FC = () => {
                             setCurrentFen={setCurrentFen}
                             setCurrentMoveIndex={setCurrentMoveIndex}
                         />
+
+                        {mode === 'two' && (
+                            <button
+                                onClick={loadNextPuzzle}
+                                className="w-full mt-2 px-6 py-3 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
+                            >
+                                New Puzzle
+                            </button>
+                        )}
+
                         {mode === 'one' && (
                             <PuzzleInterface
                                 moveInput={moveInput}
