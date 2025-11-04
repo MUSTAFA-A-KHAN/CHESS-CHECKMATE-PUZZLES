@@ -120,8 +120,8 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
                                                 console.log("CMI", moves[currentMoveIndex].toLowerCase());
                                                 try {
                                                     const move = chess.move({ from: r1, to: r2 });
-                                                    // if (move && move.san.toLowerCase() === moves[currentMoveIndex].toLowerCase()) {
-                                                    if (true) {
+                                                    if (move && r1+r2 === moves[currentMoveIndex].toLowerCase()) {
+                                                    // if (true) {
                                                         console.log("Index:", currentMoveIndex)
                                                         console.log("correct move::::)")
                                                         setFeedback('correct');
@@ -159,6 +159,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
                                                             }
 
                                                             console.log("IMplemente0.1")
+                                                            console.log(chess2.fen())
                                                             setCurrentFen(chess2.fen());
                                                             console.log("IMplemente0.2")
                                                             setCurrentMoveIndex(2);
