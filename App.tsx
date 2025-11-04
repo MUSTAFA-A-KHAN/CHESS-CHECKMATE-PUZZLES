@@ -444,12 +444,26 @@ const App: React.FC = () => {
                         />
 
                         {mode === 'two' && (
+                           <div>
                             <button
                                 onClick={loadNextPuzzle}
                                 className="w-full mt-2 px-6 py-3 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
                             >
                                 New Puzzle
                             </button>
+                            <button
+                                onClick={handleShowAnswer}
+                                className="w-full mt-2 px-6 py-3 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
+                            >
+                                Show Answer
+                            </button>
+                            {isAnswerVisible && (
+                                <p className="mt-4 text-lg text-amber-400 font-bold">
+                                    Correct moves: <span className="font-mono">{currentPuzzle.best}</span>
+                                </p>
+                            )}
+                            </div>
+
                         )}
 
                         {mode === 'one' && (
