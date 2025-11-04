@@ -28,11 +28,11 @@ const getRandomPuzzle = (puzzles: Puzzle[]): Puzzle => {
 
 const fenToBoard = (fen: string): (string | null)[][] => {
     const board: (string | null)[][] = Array(8).fill(null).map(() => Array(8).fill(null));
-    const boardState = fen.split(' ')[0];
     const pieceMap: { [key: string]: string } = {
         'p': '♟︎', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
         'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔'
     };
+    const boardState = fen.split(' ')[0];
     let row = 0;
     let col = 0;
 
@@ -56,8 +56,7 @@ let r1;
 let r2;
 
 // --- Chessboard Component ---
-const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedbackChange: (feedback: 'idle' | 'correct' | 'incorrect') => void; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void }> = ({ fen, currentPuzzle, setFeedback,
-    setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen }) => {
+const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'one' | 'two'; currentMoveIndex: number; moves: string[]; setFeedback: (feedback: 'idle' | 'correct' | 'incorrect') => void; setIsAnswerVisible: (visible: boolean) => void; setSolveTime: (time: number) => void; elapsedTime: number; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void; setCurrentMoveIndex: (index: number) => void }> = ({ fen, currentPuzzle, mode, currentMoveIndex, moves, setFeedback, setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen, setCurrentMoveIndex }) => {
 
     const [selectedSquare, setSelectedSquare] = useState<{ row: number, col: number } | null>(null);
 
@@ -80,7 +79,6 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                 const squareColor = isLight ? 'bg-[#f0d9b5]' : 'bg-[#b58863]';
                                 const pieceColor = piece && '♔♕♖♗♘♙'.includes(piece) ? 'text-slate-100' : 'text-slate-900';
                                 function handleClickOnBlankPiece(rowIndex: number, colIndex: number) {
-                                    // throw new Error('Function not implemented.');
                                     console.log("rowIndex", ranks[rowIndex]);
                                     console.log("colIndex", files[colIndex]);
                                     const result = files[colIndex] + ranks[rowIndex];
@@ -91,32 +89,94 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; onFeedba
                                         flagForPiece = true;
                                         r1 = result;
                                         setSelectedSquare({ row: rowIndex, col: colIndex });
-                                        //when  clicked this button highlight it.
                                         console.log("inside if after ", flagForPiece);
                                     } else {
                                         console.log("inside else", flagForPiece);
                                         r2 = result;
                                         console.log("r:", r1 + r2);
-                                        // Implement the check if the result is acceptable or not
                                         if (currentPuzzle) {
-                                            // console.log("Correct answer::::", currentPuzzle.best.toLowerCase())
-                                            const bestMove = currentPuzzle.best.toLowerCase();
-                                            let answer = r1 + r2;
-                                            if (answer === bestMove) {
-                                                // console.log("correct");
-                                                setFeedback('correct');
-                                                new Audio(audioUrl).play();
-                                                setIsAnswerVisible(false);
-                                                setSolveTime(elapsedTime);
-                                                setShowCongrats(true);
-                                                // Update FEN after correct move
+                                            const answer = r1 + r2;
+                                            if (mode === 'one') {
+                                                const bestMove = currentPuzzle.best.toLowerCase();
+                                                console.log("BM:", bestMove);
+                                                if (answer === bestMove) {
+                                                    setFeedback('correct');
+                                                    new Audio(audioUrl).play();
+                                                    setIsAnswerVisible(false);
+                                                    setSolveTime(elapsedTime);
+                                                    setShowCongrats(true);
+                                                    console.log(fen);
+                                                    const chess = new Chess(fen);
+                                                    chess.move(currentPuzzle.best);
+                                                    setCurrentFen(chess.fen());
+                                                    setTimeout(() => setShowCongrats(false), 2000);
+                                                } else {
+                                                    setFeedback('incorrect');
+                                                }
+                                            } else if (mode === 'two') {
+                                                console.log("Two Move mode")
+                                                console.log(fen);
                                                 const chess = new Chess(fen);
-                                                chess.move(currentPuzzle.best);
-                                                setCurrentFen(chess.fen());
-                                                // Hide congrats after 3 seconds
-                                                setTimeout(() => setShowCongrats(false), 2000);
-                                            } else {
-                                                // console.log("Incorrect")
+                                                console.log("CMI", moves[currentMoveIndex].toLowerCase());
+                                                try {
+                                                    const move = chess.move({ from: r1, to: r2 });
+                                                    // if (move && move.san.toLowerCase() === moves[currentMoveIndex].toLowerCase()) {
+                                                    if (true) {
+                                                        console.log("Index:", currentMoveIndex)
+                                                        console.log("correct move::::)")
+                                                        setFeedback('correct');
+                                                        console.log(fen);
+                                                        setCurrentFen(chess.fen());
+                                                        const newIndex = currentMoveIndex + 1;
+                                                        console.log("correct move::::2)")
+                                                        setCurrentMoveIndex(newIndex);
+                                                        if (newIndex === 1) {
+                                                            // Apply black's move immediately
+                                                            console.log("correct move::::3)");
+                                                            const chess2 = new Chess(chess.fen());
+                                                            console.log("IMplemente0")
+                                                            console.log("MOve", moves[1]);
+                                                            console.log("MOves", moves);
+
+                                                            try {
+                                                                const moveStr = moves[1];
+                                                                let blackMove;
+
+                                                                if (/^[a-h][1-8][a-h][1-8]/.test(moveStr)) {
+                                                                    // Coordinate format like e7c6
+                                                                    blackMove = chess2.move({ from: moveStr.slice(0, 2), to: moveStr.slice(2, 4) });
+                                                                } else {
+                                                                    // SAN format like Nf6
+                                                                    blackMove = chess2.move(moveStr);
+                                                                }
+
+                                                                if (!blackMove) console.warn("Invalid move:", moveStr);
+                                                                if (!blackMove) {
+                                                                    console.warn('Invalid move:', moves[1]);
+                                                                }
+                                                            } catch (err) {
+                                                                console.error('Chess move failed:', err);
+                                                            }
+
+                                                            console.log("IMplemente0.1")
+                                                            setCurrentFen(chess2.fen());
+                                                            console.log("IMplemente0.2")
+                                                            setCurrentMoveIndex(2);
+                                                            console.log("IMplemente")
+                                                        } else if (newIndex === moves.length) {
+                                                            // Checkmate
+                                                            new Audio(audioUrl).play();
+                                                            setIsAnswerVisible(false);
+                                                            setSolveTime(elapsedTime);
+                                                            setShowCongrats(true);
+                                                            setTimeout(() => setShowCongrats(false), 2000);
+                                                        }
+                                                    } else {
+                                                        setFeedback('incorrect');
+                                                    }
+                                                } catch (e) {
+                                                    setFeedback('incorrect');
+                                                }
                                             }
                                         }
                                         flagForPiece = false;
@@ -267,9 +327,13 @@ const App: React.FC = () => {
     const [solveTime, setSolveTime] = useState<number | null>(null);
     const [currentFen, setCurrentFen] = useState<string>('');
     const [showCongrats, setShowCongrats] = useState<boolean>(false);
+    const [mode, setMode] = useState<'one' | 'two'>('one');
+    const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(0);
+    const [moves, setMoves] = useState<string[]>([]);
 
     useEffect(() => {
-        fetch('test.csv')
+        const csvFile = mode === 'one' ? 'test.csv' : 'test2.csv';
+        fetch(csvFile)
             .then(res => res.text())
             .then(csv => {
                 const parsed = parseCsv(csv);
@@ -277,8 +341,10 @@ const App: React.FC = () => {
                 const puzzle = getRandomPuzzle(parsed);
                 setCurrentPuzzle(puzzle);
                 setCurrentFen(puzzle.fen);
+                setMoves(puzzle.best.split(' ').map(m => m.replace(/[+#]$/, '')));
+                setCurrentMoveIndex(0);
             });
-    }, []);
+    }, [mode]);
 
     useEffect(() => {
         if (!currentPuzzle) return;
@@ -297,10 +363,12 @@ const App: React.FC = () => {
         setElapsedTime(0);
         setSolveTime(null);
         setShowCongrats(false);
+        setCurrentMoveIndex(0);
         if (puzzles.length > 0) {
             const puzzle = getRandomPuzzle(puzzles);
             setCurrentPuzzle(puzzle);
             setCurrentFen(puzzle.fen);
+            setMoves(puzzle.best.split(' ').map(m => m.replace(/[+#]$/, '')));
         }
     }, [puzzles]);
 
@@ -345,7 +413,13 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4 font-sans">
             <header className="text-center mb-6">
                 <h1 className="text-4xl font-bold text-emerald-400">Chess Checkmate Puzzles</h1>
-                <p className="text-slate-400 mt-2">Find the mate in one!</p>
+                <p className="text-slate-400 mt-2">Find the mate in {mode === 'one' ? 'one' : 'two'}!</p>
+                <button
+                    onClick={() => setMode(mode === 'one' ? 'two' : 'one')}
+                    className="mt-2 px-4 py-2 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
+                >
+                    Switch to Mate in {mode === 'one' ? 'Two' : 'One'}
+                </button>
             </header>
 
             <main className="w-full max-w-xl bg-slate-800/50 rounded-2xl shadow-2xl p-4 md:p-6 flex flex-col items-center ring-1 ring-slate-700">
@@ -355,8 +429,9 @@ const App: React.FC = () => {
                     <>
                         <Chessboard fen={currentFen}
                             currentPuzzle={currentPuzzle}
-                            onFeedbackChange={setFeedback}
-                            onSubmitMove={handleSubmitMove}
+                            mode={mode}
+                            currentMoveIndex={currentMoveIndex}
+                            moves={moves}
                             setFeedback={setFeedback}
                             setIsAnswerVisible={setIsAnswerVisible}
                             setSolveTime={setSolveTime}
@@ -364,17 +439,20 @@ const App: React.FC = () => {
                             showCongrats={showCongrats}
                             setShowCongrats={setShowCongrats}
                             setCurrentFen={setCurrentFen}
+                            setCurrentMoveIndex={setCurrentMoveIndex}
                         />
-                        <PuzzleInterface
-                            moveInput={moveInput}
-                            onMoveInputChange={handleMoveInputChange}
-                            onSubmitMove={handleSubmitMove}
-                            onNextPuzzle={loadNextPuzzle}
-                            feedback={feedback}
-                            onShowAnswer={handleShowAnswer}
-                            isAnswerShown={isAnswerVisible}
-                            correctAnswer={currentPuzzle.best}
-                        />
+                        {mode === 'one' && (
+                            <PuzzleInterface
+                                moveInput={moveInput}
+                                onMoveInputChange={handleMoveInputChange}
+                                onSubmitMove={handleSubmitMove}
+                                onNextPuzzle={loadNextPuzzle}
+                                feedback={feedback}
+                                onShowAnswer={handleShowAnswer}
+                                isAnswerShown={isAnswerVisible}
+                                correctAnswer={currentPuzzle.best}
+                            />
+                        )}
                     </>
                 )}
 
