@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Chess } from 'chess.js';
-
+import { useGyroscope } from './hooks/useGyroscope';
 const audioUrl = 'kira_death_note.mp3';
 
 // --- Type Definition ---
@@ -56,14 +56,120 @@ let r1;
 let r2;
 
 // --- Chessboard Component ---
-const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'one' | 'two'; currentMoveIndex: number; moves: string[]; setFeedback: (feedback: 'idle' | 'correct' | 'incorrect') => void; setIsAnswerVisible: (visible: boolean) => void; setSolveTime: (time: number) => void; elapsedTime: number; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void; setCurrentMoveIndex: (index: number) => void }> = ({ fen, currentPuzzle, mode, currentMoveIndex, moves, setFeedback, setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen, setCurrentMoveIndex }) => {
+const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'one' | 'two'; currentMoveIndex: number; moves: string[]; setFeedback: (feedback: 'idle' | 'correct' | 'incorrect') => void; setIsAnswerVisible: (visible: boolean) => void; setSolveTime: (time: number) => void; elapsedTime: number; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void; setCurrentMoveIndex: (index: number) => void; motionMode: boolean; gyroscopeData: { alpha: number | null; beta: number | null; gamma: number | null; isAvailable: boolean; isListening: boolean; error: string | null; }; requestGyroAccess: () => Promise<boolean>; stopGyroListening: () => void; }> = ({ fen, currentPuzzle, mode, currentMoveIndex, moves, setFeedback, setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen, setCurrentMoveIndex, motionMode, gyroscopeData, requestGyroAccess, stopGyroListening }) => {
 
     const [selectedSquare, setSelectedSquare] = useState<{ row: number, col: number } | null>(null);
+    const [motionCursor, setMotionCursor] = useState<{ row: number, col: number }>({ row: 4, col: 4 }); // Start in center
 
     const board = fenToBoard(fen);
     const whoToMove = fen.split(' ')[1] === 'w' ? 'White' : 'Black';
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
     const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+    // Motion-based input logic
+    useEffect(() => {
+        if (!motionMode || !gyroscopeData.isListening) return;
+
+        const { beta, gamma } = gyroscopeData;
+        if (beta !== null && gamma !== null) {
+            // Map tilt to cursor movement
+            // Beta (pitch): forward/backward tilt -> row change
+            // Gamma (roll): left/right tilt -> col change
+            const sensitivity = 10; // Degrees per square
+            const deltaRow = Math.round(beta / sensitivity);
+            const deltaCol = Math.round(gamma / sensitivity);
+
+            setMotionCursor(prev => ({
+                row: Math.max(0, Math.min(7, prev.row + deltaRow)),
+                col: Math.max(0, Math.min(7, prev.col + deltaCol))
+            }));
+        }
+    }, [gyroscopeData, motionMode]);
+
+    // Handle motion-based move confirmation (e.g., double tilt or shake)
+    const handleMotionConfirm = useCallback(() => {
+        if (!motionMode || !currentPuzzle) return;
+
+        const { row, col } = motionCursor;
+        const result = files[col] + ranks[row];
+        console.log("Motion selected:", result);
+
+        if (!flagForPiece) {
+            flagForPiece = true;
+            r1 = result;
+            setSelectedSquare({ row, col });
+        } else {
+            r2 = result;
+            const answer = r1 + r2;
+            // Similar logic as click-based
+            if (mode === 'one') {
+                const bestMove = currentPuzzle.best.toLowerCase();
+                if (answer === bestMove) {
+                    setFeedback('correct');
+                    new Audio(audioUrl).play();
+                    setIsAnswerVisible(false);
+                    setSolveTime(elapsedTime);
+                    setShowCongrats(true);
+                    const chess = new Chess(fen);
+                    chess.move(currentPuzzle.best);
+                    setCurrentFen(chess.fen());
+                    setTimeout(() => setShowCongrats(false), 2000);
+                } else {
+                    setFeedback('incorrect');
+                }
+            } else if (mode === 'two') {
+                // Similar two-move logic
+                const chess = new Chess(fen);
+                try {
+                    const move = chess.move({ from: r1, to: r2 });
+                    if (move && r1 + r2 === moves[currentMoveIndex].toLowerCase()) {
+                        setFeedback('correct');
+                        setCurrentFen(chess.fen());
+                        const newIndex = currentMoveIndex + 1;
+                        setCurrentMoveIndex(newIndex);
+                        if (newIndex === 1) {
+                            const chess2 = new Chess(chess.fen());
+                            const moveStr = moves[1];
+                            let blackMove;
+                            if (/^[a-h][1-8][a-h][1-8]/.test(moveStr)) {
+                                blackMove = chess2.move({ from: moveStr.slice(0, 2), to: moveStr.slice(2, 4) });
+                            } else {
+                                blackMove = chess2.move(moveStr);
+                            }
+                            if (!blackMove) console.warn("Invalid move:", moveStr);
+                            setCurrentFen(chess2.fen());
+                            setCurrentMoveIndex(2);
+                        } else if (newIndex === moves.length) {
+                            new Audio(audioUrl).play();
+                            setIsAnswerVisible(false);
+                            setSolveTime(elapsedTime);
+                            setShowCongrats(true);
+                            setTimeout(() => setShowCongrats(false), 2000);
+                        }
+                    } else {
+                        setFeedback('incorrect');
+                    }
+                } catch (e) {
+                    setFeedback('incorrect');
+                }
+            }
+            flagForPiece = false;
+            setSelectedSquare(null);
+        }
+    }, [motionMode, motionCursor, currentPuzzle, mode, moves, currentMoveIndex, setFeedback, setIsAnswerVisible, setSolveTime, elapsedTime, setShowCongrats, setCurrentFen, setCurrentMoveIndex, fen]);
+
+    // Detect shake or specific tilt for confirmation
+    useEffect(() => {
+        if (!motionMode || !gyroscopeData.isListening) return;
+
+        const { beta, gamma } = gyroscopeData;
+        if (beta !== null && gamma !== null) {
+            // Simple shake detection: large change in gamma
+            if (Math.abs(gamma) > 45) { // Tilt more than 45 degrees
+                handleMotionConfirm();
+            }
+        }
+    }, [gyroscopeData, motionMode, handleMotionConfirm]);
 
     return (
         <div className="w-full max-w-[512px]">
@@ -79,6 +185,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
                                 const squareColor = isLight ? 'bg-[#f0d9b5]' : 'bg-[#b58863]';
                                 const pieceColor = piece && '♔♕♖♗♘♙'.includes(piece) ? 'text-slate-100' : 'text-slate-900';
                                 function handleClickOnBlankPiece(rowIndex: number, colIndex: number) {
+                                    if (motionMode) return; // Disable click in motion mode
                                     console.log("rowIndex", ranks[rowIndex]);
                                     console.log("colIndex", files[colIndex]);
                                     const result = files[colIndex] + ranks[rowIndex];
@@ -187,15 +294,16 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
 
 
                                 const isSelected = selectedSquare && selectedSquare.row === rowIndex && selectedSquare.col === colIndex;
+                                const isMotionCursor = motionMode && motionCursor.row === rowIndex && motionCursor.col === colIndex;
                                 return (
                                     <div
                                         key={`${rowIndex}-${colIndex}`}
-                                        style={{ cursor: "pointer" }}
-                                        onClick={() => handleClickOnBlankPiece(rowIndex, colIndex)}
-                                        className={`flex-1 aspect-square flex items-center justify-center ${squareColor} ${isSelected ? 'ring-4 ring-yellow-400' : ''}`}
+                                        style={{ cursor: motionMode ? "default" : "pointer" }}
+                                        onClick={() => !motionMode && handleClickOnBlankPiece(rowIndex, colIndex)}
+                                        className={`flex-1 aspect-square flex items-center justify-center ${squareColor} ${isSelected ? 'ring-4 ring-yellow-400' : ''} ${isMotionCursor ? 'ring-4 ring-blue-400' : ''}`}
                                         role="gridcell"
                                     >
-                                        <span style={{ cursor: "pointer" }} className={`text-4xl  sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]`}>
+                                        <span style={{ cursor: motionMode ? "default" : "pointer" }} className={`text-4xl  sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]`}>
                                             {piece}
                                         </span>
                                     </div>
@@ -215,6 +323,11 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
 
             <div className="bg-slate-800 text-center py-1 text-sm font-semibold text-slate-300 mt-2 rounded-md">
                 {whoToMove} to move
+                {motionMode && gyroscopeData.isListening && (
+                    <div className="text-xs text-blue-400 mt-1">
+                        Motion Mode: Tilt to move cursor, shake to select
+                    </div>
+                )}
             </div>
             {showCongrats && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
@@ -331,6 +444,9 @@ const App: React.FC = () => {
     const [mode, setMode] = useState<'one' | 'two'>('one');
     const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(0);
     const [moves, setMoves] = useState<string[]>([]);
+    const [motionMode, setMotionMode] = useState<boolean>(false);
+
+    const gyroscope = useGyroscope();
 
     useEffect(() => {
         const csvFile = mode === 'one' ? 'test.csv' : 'test2.csv';
@@ -404,6 +520,20 @@ const App: React.FC = () => {
         setFeedback('idle');
     };
 
+    const toggleMotionMode = useCallback(async () => {
+        if (!motionMode) {
+            const granted = await gyroscope.requestAccess();
+            if (granted) {
+                setMotionMode(true);
+            } else {
+                alert('Gyroscope access denied or not supported.');
+            }
+        } else {
+            gyroscope.stopListening();
+            setMotionMode(false);
+        }
+    }, [motionMode, gyroscope]);
+
     const formatTime = (seconds: number): string => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -415,12 +545,21 @@ const App: React.FC = () => {
             <header className="text-center mb-6">
                 <h1 className="text-4xl font-bold text-emerald-400">Chess Checkmate Puzzles</h1>
                 <p className="text-slate-400 mt-2">Find the mate in {mode === 'one' ? 'one' : 'two'}!</p>
-                <button
-                    onClick={() => setMode(mode === 'one' ? 'two' : 'one')}
-                    className="mt-2 px-4 py-2 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
-                >
-                    Switch to Mate in {mode === 'one' ? 'Two' : 'One'}
-                </button>
+                <div className="flex gap-2 mt-2">
+                    <button
+                        onClick={() => setMode(mode === 'one' ? 'two' : 'one')}
+                        className="px-4 py-2 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
+                    >
+                        Switch to Mate in {mode === 'one' ? 'Two' : 'One'}
+                    </button>
+                    <button
+                        onClick={toggleMotionMode}
+                        className={`px-4 py-2 font-bold rounded-lg ${motionMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                    >
+                        {motionMode ? 'Disable Motion' : 'Enable Motion'}
+                    </button>
+                </div>
+                {gyroscope.error && <p className="text-red-400 mt-2">{gyroscope.error}</p>}
             </header>
 
             <main className="w-full max-w-xl bg-slate-800/50 rounded-2xl shadow-2xl p-4 md:p-6 flex flex-col items-center ring-1 ring-slate-700">
@@ -441,6 +580,10 @@ const App: React.FC = () => {
                             setShowCongrats={setShowCongrats}
                             setCurrentFen={setCurrentFen}
                             setCurrentMoveIndex={setCurrentMoveIndex}
+                            motionMode={motionMode}
+                            gyroscopeData={gyroscope}
+                            requestGyroAccess={gyroscope.requestAccess}
+                            stopGyroListening={gyroscope.stopListening}
                         />
 
                         {mode === 'two' && (
@@ -466,7 +609,7 @@ const App: React.FC = () => {
 
                         )}
 
-                        {mode === 'one' && (
+                        {mode === 'one' && !motionMode && (
                             <PuzzleInterface
                                 moveInput={moveInput}
                                 onMoveInputChange={handleMoveInputChange}
