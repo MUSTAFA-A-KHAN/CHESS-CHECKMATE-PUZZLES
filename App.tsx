@@ -156,7 +156,8 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
     const [motionCursor, setMotionCursor] = useState<{ row: number, col: number }>({ row: 4, col: 4 }); // Start in center
     const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
     const previousFen = useRef(fen);
-    const [animatedSquare, setAnimatedSquare] = useState<{ row: number; col: number } | null>(null);
+    const [animatedMove, setAnimatedMove] = useState<{ from: { row: number; col: number }; to: { row: number; col: number }; piece: string } | null>(null);
+    const [isSliding, setIsSliding] = useState(false);
 
     const board = fenToBoard(fen);
     const whoToMove = fen.split(' ')[1] === 'w' ? 'White' : 'Black';
@@ -177,7 +178,19 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
             nextBoard.forEach((row, rowIndex) => row.forEach((piece, colIndex) => {
                 if (piece && piece !== previousBoard[rowIndex][colIndex]) destination = { row: rowIndex, col: colIndex };
             }));
-            setAnimatedSquare(destination);
+            const changedSquares = previousBoard.flatMap((row, rowIndex) => row.map((piece, colIndex) => ({ piece, rowIndex, colIndex })));
+            const source = changedSquares.find(({ piece, rowIndex, colIndex }) => piece && !nextBoard[rowIndex][colIndex]);
+            if (source && destination) {
+                setAnimatedMove({
+                    from: { row: source.rowIndex, col: source.colIndex },
+                    to: destination,
+                    piece: source.piece as string
+                });
+                setIsSliding(false);
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => setIsSliding(true));
+                });
+            }
             previousFen.current = fen;
         }
     }, [fen]);
@@ -394,11 +407,6 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
     return (
         <div className="w-full max-w-[512px]">
             <style>{`
-                @keyframes pieceSlide {
-                    0% { transform: translate3d(-18px, -18px, 0) scale(.72); opacity: .15; }
-                    65% { transform: translate3d(4px, 4px, 0) scale(1.04); opacity: 1; }
-                    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
-                }
                 @keyframes promotionPop {
                     0% { opacity: 0; transform: translateY(10px) scale(.96); }
                     100% { opacity: 1; transform: translateY(0) scale(1); }
@@ -415,6 +423,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
                                 const isLight = (rowIndex + colIndex) % 2 === 0;
                                 const squareColor = isLight ? 'bg-[#f0d9b5]' : 'bg-[#b58863]';
                                 const pieceColor = piece && '♔♕♖♗♘♙'.includes(piece) ? 'text-slate-100' : 'text-slate-900';
+                                const isAnimatedDestination = animatedMove?.to.row === rowIndex && animatedMove?.to.col === colIndex;
                                 function handleClickOnBlankPiece(rowIndex: number, colIndex: number) {
                                     if (motionMode || gameStatus) return; // Disable input in motion mode or after game end
                                     console.log("rowIndex", ranks[rowIndex]);
@@ -559,7 +568,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
                                         className={`flex-1 aspect-square flex items-center justify-center ${squareColor} transition-all duration-300 ease-out ${isSelected ? 'ring-4 ring-yellow-400 scale-[.96] z-10' : ''} ${isMotionCursor ? 'ring-4 ring-blue-400' : ''}`}
                                         role="gridcell"
                                     >
-                                        <span style={{ cursor: motionMode ? "default" : "pointer", animation: animatedSquare?.row === rowIndex && animatedSquare?.col === colIndex ? 'pieceSlide 420ms cubic-bezier(.22, 1, .36, 1)' : undefined }} className={`text-4xl sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)] transition-transform duration-300 ease-out hover:scale-110`}>
+                                        <span style={{ cursor: motionMode ? "default" : "pointer", visibility: isAnimatedDestination ? 'hidden' : 'visible' }} className={`text-4xl sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)] transition-transform duration-300 ease-out hover:scale-110`}>
                                             {piece}
                                         </span>
                                     </div>
@@ -567,6 +576,24 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
                             })}
                         </div>
                     ))}
+                    {animatedMove && (
+                        <span
+                            key={`${animatedMove.from.row}-${animatedMove.from.col}-${animatedMove.to.row}-${animatedMove.to.col}-${fen}`}
+                            onTransitionEnd={() => setAnimatedMove(null)}
+                            className={`pointer-events-none absolute z-20 flex items-center justify-center text-4xl sm:text-5xl md:text-6xl ${'♔♕♖♗♘♙'.includes(animatedMove.piece) ? 'text-slate-100' : 'text-slate-900'} drop-shadow-[0_2px_2px_rgba(0,0,0,0.55)]`}
+                            style={{
+                                left: `${animatedMove.from.col * 12.5}%`,
+                                top: `${animatedMove.from.row * 12.5}%`,
+                                width: '12.5%',
+                                height: '12.5%',
+                                transform: isSliding ? `translate(${(animatedMove.to.col - animatedMove.from.col) * 100}%, ${(animatedMove.to.row - animatedMove.from.row) * 100}%)` : 'translate(0, 0)',
+                                transition: 'transform 520ms cubic-bezier(.22, 1, .36, 1)',
+                                willChange: 'transform'
+                            } as React.CSSProperties}
+                        >
+                            {animatedMove.piece}
+                        </span>
+                    )}
                     {pendingPromotion && (
                         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm" style={{ animation: 'promotionPop 220ms ease-out' }}>
                             <div className="mx-4 rounded-2xl border border-white/15 bg-slate-900/95 p-4 text-center shadow-2xl">
