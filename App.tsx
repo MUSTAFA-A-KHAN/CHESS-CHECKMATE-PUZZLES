@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Chess } from 'chess.js';
 import { useGyroscope } from './hooks/useGyroscope';
 const audioUrl = 'kira_death_note.mp3';
@@ -8,6 +8,13 @@ interface Puzzle {
     fen: string;
     best: string;
 }
+
+type GameMode = 'one' | 'two' | 'engine-easy';
+
+const ENGINE_EASY_PUZZLE: Puzzle = {
+    fen: new Chess().fen(),
+    best: ''
+};
 
 // --- Helper Functions ---
 const parseCsv = (csv: string): Puzzle[] => {
@@ -24,6 +31,27 @@ const parseCsv = (csv: string): Puzzle[] => {
 const getRandomPuzzle = (puzzles: Puzzle[]): Puzzle => {
     const randomIndex = Math.floor(Math.random() * puzzles.length);
     return puzzles[randomIndex];
+};
+
+const getEasyEngineMove = (chess: Chess) => {
+    const legalMoves = chess.moves({ verbose: true });
+    const captures = legalMoves.filter(move => move.captured);
+    const candidateMoves = captures.length > 0 && Math.random() < 0.35 ? captures : legalMoves;
+    return candidateMoves[Math.floor(Math.random() * candidateMoves.length)];
+};
+
+type PromotionPiece = 'q' | 'r' | 'b' | 'n';
+
+const announceMove = (chess: Chess, move: { from: string; to: string; promotion?: string }) => {
+    if (!('speechSynthesis' in window)) return;
+    const pieceNames: Record<string, string> = {
+        p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king'
+    };
+    const piece = chess.get(move.from);
+    const name = pieceNames[piece?.type ?? 'p'];
+    const promotion = move.promotion ? `, promoting to ${pieceNames[move.promotion]}` : '';
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(`${name} moves from ${move.from} to ${move.to}${promotion}`));
 };
 
 const fenToBoard = (fen: string): (string | null)[][] => {
@@ -56,15 +84,66 @@ let r1;
 let r2;
 
 // --- Chessboard Component ---
-const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'one' | 'two'; currentMoveIndex: number; moves: string[]; setFeedback: (feedback: 'idle' | 'correct' | 'incorrect') => void; setIsAnswerVisible: (visible: boolean) => void; setSolveTime: (time: number) => void; elapsedTime: number; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void; setCurrentMoveIndex: (index: number) => void; motionMode: boolean; gyroscopeData: { alpha: number | null; beta: number | null; gamma: number | null; isAvailable: boolean; isListening: boolean; error: string | null; }; requestGyroAccess: () => Promise<boolean>; stopGyroListening: () => void; }> = ({ fen, currentPuzzle, mode, currentMoveIndex, moves, setFeedback, setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen, setCurrentMoveIndex, motionMode, gyroscopeData, requestGyroAccess, stopGyroListening }) => {
+const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: GameMode; currentMoveIndex: number; moves: string[]; setFeedback: (feedback: 'idle' | 'correct' | 'incorrect') => void; setIsAnswerVisible: (visible: boolean) => void; setSolveTime: (time: number) => void; elapsedTime: number; showCongrats: boolean; setShowCongrats: (show: boolean) => void; setCurrentFen: (fen: string) => void; setCurrentMoveIndex: (index: number) => void; motionMode: boolean; gyroscopeData: { alpha: number | null; beta: number | null; gamma: number | null; isAvailable: boolean; isListening: boolean; error: string | null; }; requestGyroAccess: () => Promise<boolean>; stopGyroListening: () => void; }> = ({ fen, currentPuzzle, mode, currentMoveIndex, moves, setFeedback, setIsAnswerVisible, setSolveTime, elapsedTime, showCongrats, setShowCongrats, setCurrentFen, setCurrentMoveIndex, motionMode, gyroscopeData, requestGyroAccess, stopGyroListening }) => {
 
     const [selectedSquare, setSelectedSquare] = useState<{ row: number, col: number } | null>(null);
     const [motionCursor, setMotionCursor] = useState<{ row: number, col: number }>({ row: 4, col: 4 }); // Start in center
+    const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
+    const previousFen = useRef(fen);
+    const [animatedSquare, setAnimatedSquare] = useState<{ row: number; col: number } | null>(null);
 
     const board = fenToBoard(fen);
     const whoToMove = fen.split(' ')[1] === 'w' ? 'White' : 'Black';
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
     const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+    useEffect(() => {
+        if (previousFen.current !== fen) {
+            const previousBoard = fenToBoard(previousFen.current);
+            const nextBoard = fenToBoard(fen);
+            let destination: { row: number; col: number } | null = null;
+            nextBoard.forEach((row, rowIndex) => row.forEach((piece, colIndex) => {
+                if (piece && !previousBoard[rowIndex][colIndex]) destination = { row: rowIndex, col: colIndex };
+            }));
+            setAnimatedSquare(destination);
+            previousFen.current = fen;
+        }
+    }, [fen]);
+
+    const isPromotionMove = (from: string, to: string) => {
+        const chess = new Chess(fen);
+        const piece = chess.get(from as `${string}${number}`);
+        return piece?.type === 'p' && (to[1] === '1' || to[1] === '8');
+    };
+
+    const choosePromotion = (promotion: PromotionPiece) => {
+        if (!pendingPromotion) return;
+        const { from, to } = pendingPromotion;
+        setPendingPromotion(null);
+        flagForPiece = false;
+        setSelectedSquare(null);
+        if (mode === 'engine-easy') {
+            const chess = new Chess(fen);
+            try {
+                const move = chess.move({ from, to, promotion });
+                announceMove(new Chess(fen), move);
+                setCurrentFen(chess.fen());
+                setFeedback('correct');
+                setTimeout(() => {
+                    const engine = new Chess(chess.fen());
+                    const engineMove = getEasyEngineMove(engine);
+                    if (engineMove) {
+                        announceMove(new Chess(chess.fen()), engineMove);
+                        engine.move(engineMove);
+                        setCurrentFen(engine.fen());
+                    }
+                    setFeedback('idle');
+                }, 450);
+            } catch (e) {
+                setFeedback('incorrect');
+            }
+        }
+    };
 
     // Motion-based input logic
     useEffect(() => {
@@ -100,9 +179,32 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
             setSelectedSquare({ row, col });
         } else {
             r2 = result;
+            if (isPromotionMove(r1, r2)) {
+                setPendingPromotion({ from: r1, to: r2 });
+                return;
+            }
             const answer = r1 + r2;
             // Similar logic as click-based
-            if (mode === 'one') {
+            if (mode === 'engine-easy') {
+                const chess = new Chess(fen);
+                try {
+                    const move = chess.move({ from: r1, to: r2 });
+                    announceMove(new Chess(fen), move);
+                    setCurrentFen(chess.fen());
+                    setFeedback('correct');
+                    setTimeout(() => {
+                        const engine = new Chess(chess.fen());
+                        const engineMove = getEasyEngineMove(engine);
+                        if (engineMove) {
+                            engine.move(engineMove);
+                            setCurrentFen(engine.fen());
+                        }
+                        setFeedback('idle');
+                    }, 450);
+                } catch (e) {
+                    setFeedback('incorrect');
+                }
+            } else if (mode === 'one') {
                 const bestMove = currentPuzzle.best.toLowerCase();
                 if (answer === bestMove) {
                     setFeedback('correct');
@@ -173,11 +275,22 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
 
     return (
         <div className="w-full max-w-[512px]">
+            <style>{`
+                @keyframes pieceSlide {
+                    0% { transform: translate3d(-18px, -18px, 0) scale(.72); opacity: .15; }
+                    65% { transform: translate3d(4px, 4px, 0) scale(1.04); opacity: 1; }
+                    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+                }
+                @keyframes promotionPop {
+                    0% { opacity: 0; transform: translateY(10px) scale(.96); }
+                    100% { opacity: 1; transform: translateY(0) scale(1); }
+                }
+            `}</style>
             <div className="flex">
                 <div className="flex flex-col justify-around text-slate-400 text-sm font-bold select-none pr-2">
                     {ranks.map(rank => <div key={rank} className="h-full flex-1 flex items-center justify-center">{rank}</div>)}
                 </div>
-                <div className="w-full aspect-square flex flex-col shadow-lg rounded-md overflow-hidden bg-slate-700">
+                <div className="relative w-full aspect-square flex flex-col shadow-lg rounded-md overflow-hidden bg-slate-700 ring-1 ring-white/10 transition-shadow duration-500 hover:shadow-emerald-900/40">
                     {board.map((row, rowIndex) => (
                         <div key={rowIndex} className="flex flex-row flex-1">
                             {row.map((piece, colIndex) => {
@@ -200,10 +313,33 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
                                     } else {
                                         console.log("inside else", flagForPiece);
                                         r2 = result;
+                                        if (isPromotionMove(r1, r2)) {
+                                            setPendingPromotion({ from: r1, to: r2 });
+                                            return;
+                                        }
                                         console.log("r:", r1 + r2);
                                         if (currentPuzzle) {
                                             const answer = r1 + r2;
-                                            if (mode === 'one') {
+                                            if (mode === 'engine-easy') {
+                                                const chess = new Chess(fen);
+                                                try {
+                                                    const move = chess.move({ from: r1, to: r2 });
+                                                    announceMove(new Chess(fen), move);
+                                                    setCurrentFen(chess.fen());
+                                                    setFeedback('correct');
+                                                    setTimeout(() => {
+                                                        const engine = new Chess(chess.fen());
+                                                        const engineMove = getEasyEngineMove(engine);
+                                                        if (engineMove) {
+                                                            engine.move(engineMove);
+                                                            setCurrentFen(engine.fen());
+                                                        }
+                                                        setFeedback('idle');
+                                                    }, 450);
+                                                } catch (e) {
+                                                    setFeedback('incorrect');
+                                                }
+                                            } else if (mode === 'one') {
                                                 const bestMove = currentPuzzle.best.toLowerCase();
                                                 console.log("BM:", bestMove);
                                                 if (answer === bestMove) {
@@ -300,10 +436,10 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
                                         key={`${rowIndex}-${colIndex}`}
                                         style={{ cursor: motionMode ? "default" : "pointer" }}
                                         onClick={() => !motionMode && handleClickOnBlankPiece(rowIndex, colIndex)}
-                                        className={`flex-1 aspect-square flex items-center justify-center ${squareColor} ${isSelected ? 'ring-4 ring-yellow-400' : ''} ${isMotionCursor ? 'ring-4 ring-blue-400' : ''}`}
+                                        className={`flex-1 aspect-square flex items-center justify-center ${squareColor} transition-all duration-300 ease-out ${isSelected ? 'ring-4 ring-yellow-400 scale-[.96] z-10' : ''} ${isMotionCursor ? 'ring-4 ring-blue-400' : ''}`}
                                         role="gridcell"
                                     >
-                                        <span style={{ cursor: motionMode ? "default" : "pointer" }} className={`text-4xl  sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)]`}>
+                                        <span style={{ cursor: motionMode ? "default" : "pointer", animation: animatedSquare?.row === rowIndex && animatedSquare?.col === colIndex ? 'pieceSlide 420ms cubic-bezier(.22, 1, .36, 1)' : undefined }} className={`text-4xl sm:text-5xl md:text-6xl ${pieceColor} drop-shadow-[0_2px_2px_rgba(0,0,0,0.4)] transition-transform duration-300 ease-out hover:scale-110`}>
                                             {piece}
                                         </span>
                                     </div>
@@ -311,6 +447,26 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: 'o
                             })}
                         </div>
                     ))}
+                    {pendingPromotion && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm" style={{ animation: 'promotionPop 220ms ease-out' }}>
+                            <div className="mx-4 rounded-2xl border border-white/15 bg-slate-900/95 p-4 text-center shadow-2xl">
+                                <p className="mb-3 text-sm font-semibold text-white">Choose your promotion</p>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {(['q', 'r', 'b', 'n'] as PromotionPiece[]).map(piece => (
+                                        <button
+                                            key={piece}
+                                            type="button"
+                                            onClick={() => choosePromotion(piece)}
+                                            className="flex h-14 w-14 items-center justify-center rounded-xl bg-slate-700 text-4xl text-white shadow-md transition-all duration-200 hover:-translate-y-1 hover:bg-emerald-600 hover:shadow-emerald-500/30 active:scale-90"
+                                            aria-label={`Promote to ${piece === 'q' ? 'queen' : piece === 'r' ? 'rook' : piece === 'b' ? 'bishop' : 'knight'}`}
+                                        >
+                                            {piece === 'q' ? '♕' : piece === 'r' ? '♖' : piece === 'b' ? '♗' : '♘'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -441,7 +597,7 @@ const App: React.FC = () => {
     const [solveTime, setSolveTime] = useState<number | null>(null);
     const [currentFen, setCurrentFen] = useState<string>('');
     const [showCongrats, setShowCongrats] = useState<boolean>(false);
-    const [mode, setMode] = useState<'one' | 'two'>('one');
+    const [mode, setMode] = useState<GameMode>('one');
     const [currentMoveIndex, setCurrentMoveIndex] = useState<number>(0);
     const [moves, setMoves] = useState<string[]>([]);
     const [motionMode, setMotionMode] = useState<boolean>(false);
@@ -449,6 +605,16 @@ const App: React.FC = () => {
     const gyroscope = useGyroscope();
 
     useEffect(() => {
+        if (mode === 'engine-easy') {
+            setPuzzles([]);
+            setCurrentPuzzle(ENGINE_EASY_PUZZLE);
+            setCurrentFen(ENGINE_EASY_PUZZLE.fen);
+            setMoves([]);
+            setCurrentMoveIndex(0);
+            setFeedback('idle');
+            return;
+        }
+
         const csvFile = mode === 'one' ? 'test.csv' : 'test2.csv';
         fetch(csvFile)
             .then(res => res.text())
@@ -481,13 +647,19 @@ const App: React.FC = () => {
         setSolveTime(null);
         setShowCongrats(false);
         setCurrentMoveIndex(0);
+        if (mode === 'engine-easy') {
+            setCurrentPuzzle(ENGINE_EASY_PUZZLE);
+            setCurrentFen(ENGINE_EASY_PUZZLE.fen);
+            setMoves([]);
+            return;
+        }
         if (puzzles.length > 0) {
             const puzzle = getRandomPuzzle(puzzles);
             setCurrentPuzzle(puzzle);
             setCurrentFen(puzzle.fen);
             setMoves(puzzle.best.split(' ').map(m => m.replace(/[+#]$/, '')));
         }
-    }, [puzzles]);
+    }, [mode, puzzles]);
 
     const handleMoveInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setMoveInput(e.target.value);
@@ -544,13 +716,15 @@ const App: React.FC = () => {
         <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4 font-sans">
             <header className="text-center mb-6">
                 <h1 className="text-4xl font-bold text-emerald-400">Chess Checkmate Puzzles</h1>
-                <p className="text-slate-400 mt-2">Find the mate in {mode === 'one' ? 'one' : 'two'}!</p>
+                <p className="text-slate-400 mt-2">
+                    {mode === 'engine-easy' ? 'Play the easy engine · 800 Elo' : `Find the mate in ${mode === 'one' ? 'one' : 'two'}!`}
+                </p>
                 <div className="flex gap-2 mt-2">
                     <button
-                        onClick={() => setMode(mode === 'one' ? 'two' : 'one')}
+                        onClick={() => setMode(mode === 'one' ? 'two' : mode === 'two' ? 'engine-easy' : 'one')}
                         className="px-4 py-2 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
                     >
-                        Switch to Mate in {mode === 'one' ? 'Two' : 'One'}
+                        Switch to {mode === 'one' ? 'Mate in Two' : mode === 'two' ? 'Easy Engine' : 'Mate in One'}
                     </button>
                     <button
                         onClick={toggleMotionMode}
@@ -620,6 +794,18 @@ const App: React.FC = () => {
                                 isAnswerShown={isAnswerVisible}
                                 correctAnswer={currentPuzzle.best}
                             />
+                        )}
+
+                        {mode === 'engine-easy' && (
+                            <div className="w-full max-w-sm mt-6 text-center text-slate-300">
+                                <p className="text-sm">You play White. Click a piece, then its destination.</p>
+                                <button
+                                    onClick={loadNextPuzzle}
+                                    className="w-full mt-4 px-6 py-3 bg-slate-700 text-slate-300 font-bold rounded-lg hover:bg-slate-600"
+                                >
+                                    Reset Game
+                                </button>
+                            </div>
                         )}
                     </>
                 )}
