@@ -103,7 +103,7 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
             const nextBoard = fenToBoard(fen);
             let destination: { row: number; col: number } | null = null;
             nextBoard.forEach((row, rowIndex) => row.forEach((piece, colIndex) => {
-                if (piece && !previousBoard[rowIndex][colIndex]) destination = { row: rowIndex, col: colIndex };
+                if (piece && piece !== previousBoard[rowIndex][colIndex]) destination = { row: rowIndex, col: colIndex };
             }));
             setAnimatedSquare(destination);
             previousFen.current = fen;
@@ -139,6 +139,48 @@ const Chessboard: React.FC<{ fen: string; currentPuzzle: Puzzle | null; mode: Ga
                     }
                     setFeedback('idle');
                 }, 450);
+            } catch (e) {
+                setFeedback('incorrect');
+            }
+        } else if (currentPuzzle) {
+            const chess = new Chess(fen);
+            const candidate = `${from}${to}${promotion}`;
+            const expected = (mode === 'one' ? currentPuzzle.best : moves[currentMoveIndex] ?? '')
+                .toLowerCase()
+                .replace(/[+#]$/, '');
+            if (candidate !== expected) {
+                setFeedback('incorrect');
+                return;
+            }
+
+            try {
+                const move = chess.move({ from, to, promotion });
+                announceMove(new Chess(fen), move);
+                setCurrentFen(chess.fen());
+                setFeedback('correct');
+                if (mode === 'one') {
+                    setSolveTime(elapsedTime);
+                    setShowCongrats(true);
+                    setTimeout(() => setShowCongrats(false), 2000);
+                } else {
+                    const newIndex = currentMoveIndex + 1;
+                    setCurrentMoveIndex(newIndex);
+                    if (newIndex === 1 && moves[1]) {
+                        const response = new Chess(chess.fen());
+                        const responseMove = /^[a-h][1-8][a-h][1-8]/.test(moves[1])
+                            ? response.move({ from: moves[1].slice(0, 2), to: moves[1].slice(2, 4) })
+                            : response.move(moves[1]);
+                        if (responseMove) {
+                            announceMove(new Chess(chess.fen()), responseMove);
+                            setCurrentFen(response.fen());
+                        }
+                        setCurrentMoveIndex(2);
+                    } else if (newIndex === moves.length) {
+                        setSolveTime(elapsedTime);
+                        setShowCongrats(true);
+                        setTimeout(() => setShowCongrats(false), 2000);
+                    }
+                }
             } catch (e) {
                 setFeedback('incorrect');
             }
